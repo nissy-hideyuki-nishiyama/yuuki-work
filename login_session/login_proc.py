@@ -1,6 +1,5 @@
 ## HTMLクローラー関連
 import requests
-# from time import sleep
 import time
 
 ## HTML解析関連
