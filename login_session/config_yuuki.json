@@ -1,10 +1,11 @@
 {
+    "output_json": "./cargo_output.json",
     "datacsv": {
         "filepath": "./ever.csv",
         "encoding": "shift-jis"
     },
     "url": {
-        "top": "https://ct.shipmentlink.com/",
+        "top": "https://ct.shipmentlink.com",
         "cargo_tracking": "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do"
     },
     "chromedriver": {

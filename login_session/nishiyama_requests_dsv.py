@@ -1,14 +1,14 @@
 # モジュールの読み込み
 # ## HTMLクローラー関連
 import requests
-from selenium import webdriver
-from selenium.webdriver.support.ui import Select
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common import exceptions
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.action_chains import ActionChains
-from selenium.webdriver.chrome import service as fs
+# from selenium import webdriver
+# from selenium.webdriver.support.ui import Select
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.common import exceptions
+# from selenium.webdriver.support import expected_conditions as EC
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.common.action_chains import ActionChains
+# from selenium.webdriver.chrome import service as fs
 
 ## HTML解析関連
 from bs4 import BeautifulSoup
@@ -141,7 +141,7 @@ def save_dict(cfg, dict):
     output_file.close()
     return None
 
-# クローラーのセットアップをする
+# クローラーのセットアップをする (selenium版のみ)
 def setup_driver(cfg):
     """
     seleniumを初期化する
@@ -164,7 +164,7 @@ def setup_driver(cfg):
     mouse = webdriver.ActionChains(driver)
     return driver , mouse
 
-# トップページページに接続し、セッションやCookieを取得する
+# トップページに接続し、セッションやCookieを取得する (selenium版)
 def prepare_proc(cfg):
     """
     クローラーをセットアップする
@@ -188,7 +188,26 @@ def prepare_proc(cfg):
     save_selenium_html(_html, 'top.html')
     return driver
 
-# カーゴトラッキングページに接続する
+# トップページに接続し、セッションやCookieを取得する (requests版)
+def prepace_proc_requests(cfg):
+    """トップページに接続し、セッションやCookieを取得する
+
+    Args:
+        cfg (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    global http_req_num
+    headers = {}
+    headers['user-agent'] = cfg['chromedriver']['user-agent']
+    with requests.Session() as ses:
+        __html = ses.get(cfg['url']['top'], headers=headers)
+        http_req_num += 1
+        __cookies = ses.cookies
+        return ses, __html, __cookies
+    
+# カーゴトラッキングページに接続する (selenium版)
 def connect_cargo_tracking(cfg, driver):
     """
     カーゴトラッキングページに接続する
@@ -208,7 +227,45 @@ def connect_cargo_tracking(cfg, driver):
     # save_selenium_html(_html, 'cargo.html')
     return driver
 
-# カーゴトラッキングページにカーゴ番号を入力し、カーゴ情報ページを表示する
+# カーゴトラッキングページに接続する　(requests版)
+def connect_cargo_tracking_requests(cfg, ses):
+    """カーゴトラッキングページに接続する
+
+    Args:
+        cfg (dict): 設定dict
+        ses (obj): セッション
+
+    Returns:
+        res: カーゴトラッキングページのレスポンス
+    """
+    global http_req_num
+    # リクエストヘッダーを作成する
+    headers = {}
+    headers['User-Agent'] = cfg['chromedriver']['user-agent']
+    headers['Referer'] = cfg['url']['top']
+    res = ses.post(cfg['url']['cargo_tracking'], headers=headers, cookies=ses.cookies)
+    http_req_num += 1
+    return ses, res
+
+# カーゴトラッキングページを解析して、フォームデータを取得する
+def Analystic_FormData_Cargo_Traking(res):
+    """カーゴトラッキングページを解析して、フォームデータを取得する
+
+    Args:
+        res (obj): カーゴトラッキングページのレスポンス
+
+    Returns:
+        form_keys: POSTメソッド時のフォームデータのキーのリスト
+    """
+    form_keys = []
+    soup = BeautifulSoup(res.text, features='html.parser')
+    _form = soup.find('form')
+    _form_input = _form.find_all('input', type='hidden')
+    for _key in _form_input:
+        form_keys.append(_key.attrs['name'])
+    return form_keys
+
+# カーゴトラッキングページにカーゴ番号を入力し、カーゴ情報ページを表示する (selenium版)
 def get_cargo_basic_info(cfg, driver):
     """
     カーゴ番号を選択し、カーゴ番号を入力し、カーゴ情報ページを表示する
@@ -238,16 +295,49 @@ def get_cargo_basic_info(cfg, driver):
     save_selenium_html(html, 'cargo_info_' + booking_no + '.html')
     return driver, html
 
+# カーゴトラッキングページにカーゴ番号を入力し、カーゴ情報ページを表示する (requests版)
+def get_cargo_basic_info_requests(cfg, ses, form_keys):
+    """カーゴトラッキングページにカーゴ番号を入力し、カーゴ情報ページを表示する
+
+    Args:
+        cfg (dict): 設定dict
+        ses (obj): セッション
+
+    Returns:
+        res: カーゴ情報ページのレスポンス
+    """
+    global http_req_num
+    # リクエストヘッダーを作成する
+    headers = {}
+    headers['User-Agent'] = cfg['chromedriver']['user-agent']
+    headers['Referer'] = cfg['url']['cargo_tracking']
+    headers['Origin'] = cfg['url']['top']
+    # 空のリクエスト用フォームデータを作成する
+    form_data = {}
+    for key in form_keys:
+        form_data[key] = ''
+    # キーを追加する
+    form_data['SEL'] = 's_bk'
+    # 値を入れてリクエスト用のフォームデータを作成する
+    form_data['NO'] = cfg['cargo']
+    form_data['bkno'] = cfg['cargo']
+    form_data['TYPE'] = 'BK'
+    res = ses.post(cfg['url']['cargo_tracking'], headers=headers, data=form_data)
+    http_req_num += 1
+    # htmlファイルを保存する
+    save_requests_html(res, './cargo_info_requests_' + cfg['cargo'] + '.html')
+    return ( ses, res.text )
+
 # カーゴ情報ページを解析し、各種のデータをdict形式で取得する
 ## Bill of Lading No用
-def Analystic_FormData_Bill(html):
+def Analystic_FormData_Bill(driver, html):
     """
     カーゴ情報ページを解析し、各種のデータをdict形式で取得する
     """
     return None
 
 ## Container No用
-def Analystic_FormData_Container():
+def Analystic_FormData_Container(driver, html):
     """
     カーゴ情報ページを解析し、各種のデータをdict形式で取得する
     dict
@@ -255,23 +345,31 @@ def Analystic_FormData_Container():
     return None
 
 ## Booking No用
-def Analystic_FormData_Booking(driver, html):
+## (selenium版)
+#def Analystic_FormData_Booking(driver, html):
+## (requests版)
+def Analystic_FormData_Booking(cfg, ses, html):
     """
     カーゴ情報ページを解析し、各種のデータをdict形式で取得する
     dict
     """
+    # 初期化する
     cargo_info_dict = {}
     _cai_list=[]
     _cai_data = {}
+    _form_data = {}
     soup = BeautifulSoup(html, features='html.parser')
     _div = soup.find('div', class_="content_style")
     _table = _div.find_all('table', class_="globalpage")
     # B/L No.　と Vessel Voyage on B/L の値を取得する
-    _ec_table = _table[2].find_all('table', class_="ec-table ec-table-sm")
-    _td = _ec_table[0].find_all('td', class_="f12wrdb2")
+    # _ec_table = _table[2].find_all('table', class_="ec-table ec-table-sm")
+    # _ec_table = _table[2].find_all('td', class_="f12wrdb2")
+    # seleniumと構造が違うため変更する
+    _td = _table[2].find_all('td', class_="f12wrdb2")
     bl_no = _td[1].contents[0].string
     bl_vessel = _td[2].contents[0].string
     # Basic Information
+    _ec_table = _div.find_all('table', class_="ec-table ec-table-sm")
     _tr = _ec_table[1].find_all('tr')
     # Place of Receipt
     _row_place_of_receipt = _tr[2].find_all('td')
@@ -300,6 +398,15 @@ def Analystic_FormData_Booking(driver, html):
     _booking_status = _row_exchange_rate[2].contents[0]
     cargo_info_dict['booking_stastus'] = unicodedata.normalize("NFKD", _booking_status).strip()
     # Container Activity Infomation Table
+    # requestsのPOSTメソッドで利用するフォームデータを作成する (requests版)
+    _form = _div.find_all('form')
+    for _input in _form[2].find_all('input'):
+        _form_key = _input.attrs['name']
+        if _input.has_attr('value'):
+            _form_value = _input.attrs['value']
+        else:
+            _form_value = ''
+        _form_data[str(_form_key)] = str(_form_value)
     # Container Row
     _ca_tr = _ec_table[3].find_all('tr')
     # コンテナ情報行の項目を取得する。2行目が取得する対象
@@ -323,8 +430,10 @@ def Analystic_FormData_Booking(driver, html):
         _cai_data['full_in_date'] = _cai[11].string
         _cai_data['full_return_to'] = _cai[12].contents
         _cai_data['href'] = _cai[0].find('a')
-        # コンテナの移動情報を取得する
-        _container_move = Display_Container_Move(driver, _cai_data)
+        # コンテナの移動情報を取得する (selenium版)
+        #_container_move = Display_Container_Move(driver, _cai_data)
+        # コンテナの移動情報を取得する (requests版)
+        _container_move = Display_Container_Move_requests(cfg, ses, _form_data, _cai_data)
         _cai_list.append(_cai_data)
     # コンテナ情報をdictに保存する
     cargo_info_dict['cai']=_cai_list
@@ -337,15 +446,15 @@ def Collect_CagoInfo():
     """
     return None
 
-# コンテナ移動情報ページを表示する
+# コンテナ移動情報ページを表示する (selenium版)
 def Display_Container_Move(driver, cai_data):
     """コンテナ移動ページを表示する
 
     Args:
-        href (obj): <a href>タグ
-
+        driver: WEBドライバー
+        cai_data(dict): コンテナ移動情報
     Returns:
-        html: コンテナ移動情報ページ
+        driver: WEBドライバー
     """
     global http_req_num
     # 待機時間を設定する
@@ -380,6 +489,36 @@ def Display_Container_Move(driver, cai_data):
     driver.switch_to.window(handle_array[0])
     return ( driver )
 
+# コンテナ移動情報ページを表示する (requests版)
+def Display_Container_Move_requests(cfg, ses, form_data, cai_data):
+    """_summary_
+
+    Args:
+        ses (_type_): _description_
+        cai_data (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    global http_req_num
+    # リクエストヘッダーを作成する
+    headers = {}
+    headers['User-Agent'] = cfg['chromedriver']['user-agent']
+    headers['Origin'] = cfg['url']['top']
+    headers['Referer'] = cfg['url']['cargo_tracking']
+    # フォームデータのコンテナ番号を書き換える
+    form_data['cntr_no'] = cai_data['no']
+    # カーゴ情報ページを表示した際のcookiesを設定する
+    cookies = ses.cookies
+    cookies['TDB1_Function_Type'] = 'quick'
+    res = ses.post(cfg['url']['cargo_tracking'], headers=headers, cookies=cookies, data=form_data)
+    http_req_num += 1
+    # htmlファイルを保存する
+    save_requests_html(res, './container_move_info_requests_' + cai_data['no'] + '.html')
+    # 取得したコンテナ移動情報ページを分析する
+    ( cai_data, _a_href ) = Analystic_FormData_Container_Move(res.text, cai_data)
+    return ses, res
+
 # 取得したコンテナ移動情報ページを分析する
 def Analystic_FormData_Container_Move(html, cai_data):
     """
@@ -408,7 +547,6 @@ def Analystic_FormData_Container_Move(html, cai_data):
         _mv_history.append(_mv)
     cai_data['move_history'] = _mv_history
     return ( cai_data, _a_href )
-    
 
 # メインルーチン
 def main():
@@ -425,13 +563,19 @@ def main():
     # データファイルを読み込む
     #cargo_data = read_data(cfg)
     # クローラーをセットアップし、トップページに接続して、cookieなどを取得する
-    driver = prepare_proc(cfg)
+    #driver = prepare_proc(cfg)
+    ( ses, html, cookie ) = prepace_proc_requests(cfg)
     # カーゴ番号検索ページを表示する
-    driver = connect_cargo_tracking(cfg, driver)
+    #driver = connect_cargo_tracking(cfg, driver)
+    ( ses, res ) = connect_cargo_tracking_requests(cfg, ses)
+     # カーゴ番号検索ページを分析し、フォームデータのキーを取得する
+    form_keys = Analystic_FormData_Cargo_Traking(res)
     # カーゴ番号を入力し、カーゴ情報ページを表示する
-    ( driver, cargo_info ) = get_cargo_basic_info(cfg, driver)
+    #( driver, cargo_info ) = get_cargo_basic_info(cfg, driver)
+    ( ses, cargo_info ) = get_cargo_basic_info_requests(cfg, ses, form_keys)
     # カーゴ情報ページを解析し、dictに保存する
-    cargo_info_dict = Analystic_FormData_Booking(driver, cargo_info)
+    #cargo_info_dict = Analystic_FormData_Booking(driver, cargo_info)
+    cargo_info_dict = Analystic_FormData_Booking(cfg, ses, cargo_info)
     # カーゴ情報のdictを表示する
     pprint.pprint(cargo_info_dict)
     return logger
