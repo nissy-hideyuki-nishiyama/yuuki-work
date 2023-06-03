@@ -1,0 +1,17 @@
+{
+    "output_json": "./cargo_output.json",
+    "datacsv": {
+        "filepath": "./ever.csv",
+        "encoding": "shift-jis"
+    },
+    "url": {
+        "top": "https://ct.shipmentlink.com",
+        "cargo_tracking": "https://ct.shipmentlink.com/servlet/TDB1_CargoTracking.do"
+    },
+    "chromedriver": {
+        "driver_path": "/usr/lib64/chrome-browser/chromedriver",
+        "opt_binary": "/usr/bin/google-chrome-stable",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36"
+    },
+    "cargo": "237300139244"
+}
